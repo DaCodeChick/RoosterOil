@@ -181,7 +181,7 @@ impl Message {
 
     /// Writes a boolean value to the message buffer.
     pub fn write_bool(&mut self, value: bool) {
-        self.buffer.put_u8(if value { 1 } else { 0 });
+        self.write_u8(if value { 1 } else { 0 });
     }
 
     /// Writes a byte slice to the message buffer, prefixed with its length as a 32-bit unsigned integer.
