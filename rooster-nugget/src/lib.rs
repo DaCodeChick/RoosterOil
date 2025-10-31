@@ -39,3 +39,7 @@ pub enum MsgError {
 
 /// Result type for message operations.
 pub type MsgResult<T> = Result<T, MsgError>;
+
+pub const LOBBY_PORT: u16 = 7201;
+pub const LOGIN_PORT: u16 = 7101;
+pub const WORLD_PORT: u16 = 7401;
