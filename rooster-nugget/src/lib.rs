@@ -31,6 +31,8 @@ pub enum MsgError {
     KeyInit,
     #[error("Invalid key length: {0}")]
     KeyLength(usize),
+    #[error("Unknown opcode: {0}")]
+    Opcode(u16),
     #[error("Parse error: {0}")]
     Parse(String),
     #[error("Underflow error, bytes Reqed: {0}")]
@@ -39,6 +41,13 @@ pub enum MsgError {
 
 /// Result type for message operations.
 pub type MsgResult<T> = Result<T, MsgError>;
+
+/// Enum representing either a client or server opcode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opcode {
+    Client(ClientOpcode),
+    Server(ServerOpcode),
+}
 
 pub const LOBBY_PORT: u16 = 7201;
 pub const LOGIN_PORT: u16 = 7101;

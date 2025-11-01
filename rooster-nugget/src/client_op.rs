@@ -1,235 +1,372 @@
-// AUTHENTICATION & CHARACTER (0x2EE2 - 0x2EE6)
-pub const REQ_LOGIN: u16 = 0x2EE2;
-pub const REQ_CREATE_CHARACTER: u16 = 0x2EE3;
-pub const REQ_DELETE_CHARACTER: u16 = 0x2EE4;
-pub const REQ_CHARACTER_LIST: u16 = 0x2EE5;
-pub const REQ_ENTER_WORLD: u16 = 0x2EE6;
-pub const ANS_LOGIN_CONFIRM: u16 = 0x2EE7;
+use crate::MsgError;
 
-// MOVEMENT & POSITION (0x30xx range estimated)
-pub const REQ_MOVE_START: u16 = 0x30D5;
-pub const REQ_MOVE_STOP: u16 = 0x30D6;
-pub const REQ_TELEPORT: u16 = 0x3000;
-pub const REQ_TELEPORT_SAVE_POINT: u16 = 0x3001;
-pub const REQ_MULTI_TELEPORT_NPC: u16 = 0x3002;
-pub const REQ_SKILL_TELEPORT: u16 = 0x3003;
-pub const REQ_GLIDER_TELEPORT: u16 = 0x3004;
-pub const REQ_GUILD_HOUSE_TELEPORT: u16 = 0x3005;
-pub const REQ_PARTY_DUNGEON_TELEPORT: u16 = 0x3006;
+/// Client opcodes for the game client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum ClientOpcode {
+    Login = 0x2EE2,
+    CreateCharacter,
+    DeleteCharacter,
+    CharacterList,
+    EnterWorld,
+    LoginConfirm,
+    Teleport = 0x3000,
+    TeleportSavePoint,
+    MultiTeleportNPC,
+    SkillTeleport,
+    GliderTeleport,
+    GuildHouseTeleport,
+    PartyDungeonTeleport,
+    MoveStart = 0x30D5,
+    MoveStop,
+    Skill = 0x3100,
+    SkillAdd,
+    SkillStart,
+    SkillDamage,
+    SkillCastStart,
+    SkillCastCancel,
+    SkillChannelComplete,
+    SkillChannelCancel,
+    SkillMoveStart,
+    SkillMoveNotify,
+    SkillMoveCancel,
+    SkillMoveEnd,
+    SkillDamageTick,
+    SkillStartItem,
+    NormalAttack = 0x3110,
+    DamageNormalAttack,
+    ArcherAttack,
+    AutoAttack,
+    AutoAttackNotify,
+    ItemDetailInfo = 0x3200,
+    ItemListInNPC,
+    ItemWeaveUse,
+    ItemTransform,
+    GiveEffectToItem,
+    OutfitChangeItem,
+    OutfitDivideReleaseItem,
+    ExtendTimeSetItem,
+    RideExtendItem,
+    SealItem,
+    SealItemClear,
+    RefineItem = 0x3300,
+    RefineProbability,
+    BeginRefineShop,
+    ChangeRefineShopName,
+    RefineShopOpen,
+    RandomRefineCommission,
+    ChangeRandomRefineShopName,
+    RandomRefineItem,
+    RandomEnforceItem,
+    RandomEnforceItemConfirm,
+    DirectReinforce,
+    TransferReinforceItem,
+    GrindingItemReset,
+    InitGrindingOpt,
+    BestrowAttribute,
+    PartySummary = 0x3400,
+    PartyInvitation,
+    PartyJoin,
+    PartyOut,
+    PartyChangeItemRule,
+    PartyChangeExpRule,
+    PartyChangeMaster,
+    PartyExpulsion,
+    PartyNotice,
+    PartyRight,
+    PartyChangeGroup,
+    PartyEffectList,
+    PartyDiceStart,
+    PartyDiceJoin,
+    PartyDiceChatCmd,
+    PartyMemberPCOID,
+    PartyTacticsTarget,
+    PartyTypeChange,
+    PartyFightTrim,
+    PartyFightTrimVote,
+    PartyJurisdictionIndun,
+    PartySubMaster,
+    PartyFrameMove,
+    PartyDismissSubMaster,
+    PartyKickVote,
+    PartyMemberKickVoteStart,
+    GuildCreate = 0x3500,
+    GuildDelete,
+    GuildMemList,
+    GuildInviteMember,
+    GuildKickMember,
+    GuildUnregisterMe,
+    GuildNoticeUpdate,
+    GuildEmblem,
+    GuildEmblemUpdate,
+    GuildAuthority,
+    GuildDelAuthority,
+    GuildModifyAuthority,
+    GuildMemberModifyAuth,
+    GuildMasterHandover,
+    GuildStorage,
+    GuildStorageItemPut,
+    GuildStorageItemGet,
+    GuildFundsInHandDeposit,
+    GuildFundsInHandWithdraw,
+    GuildStorageStatementItem,
+    GuildStorageStatementZeny,
+    GuildDelPossible,
+    GuildSkillLearn,
+    GuildSkillList,
+    GuildSkillLearnBook,
+    GuildEmergencyCallAnswer,
+    GuildTaxInquiry,
+    GuildTaxWithdraw,
+    GuildSelectRobe,
+    GuildListRegisteredRobe,
+    GuildSetBribePercent,
+    Ping = 0x3600,
+    CutSceneStart,
+    CutSceneEnd,
+    HelperDeclare,
+    AppearanceChange,
+    CheatTool,
+    ReviewPC,
+    AllowAnyoneReviewMe,
+    DungeonEntranceInfo,
+    DungeonLevelSelect,
+    QuestionDungeonParticipateJoin,
+    JobMasteryStart = 0x3610,
+    JobMasteryTrain,
+    JobMasteryUpgrade,
+    JumpLevelUp,
+    MonsterCollection = 0x3620,
+    MonsterCollectionSelect,
+    MonsterCollectionCombineProtein,
+    MonsterCollectionUseProtein,
+    PetCollection,
+    PetCollectionSelect,
+    PetCollectionCombineEggBlank,
+    PetCollectionUsePetEgg,
+    PetCollectionIncubator,
+    PetCollectionEggIntoIncubator,
+    PetCollectionCollectEgg,
+    PetCollectionActivePet,
+    PetCollectionSetActivePet,
+    SiegeArmsUseStart = 0x3630,
+    SiegeArmsUseEnd,
+    SiegeArmsRotateStart,
+    SiegeArmsRotateStop,
+    SiegeArmsUseSkill,
+    TrainingRoomJoin = 0x3640,
+    TrainingRoomIn,
+    TrainingRoomOut,
+    TrainingRoomInCancel,
+    Rank = 0x3650,
+    RankList,
+    RankerList,
+    RankerBuff,
+    AttendanceReward = 0x3660,
+    AttendanceRewardGetItem,
+    PlayTimeReward,
+    PlayTimeRewardGetItem,
+    ShowAttendanceState,
+    MakeOfferings,
+    ImprintGuardianSeal,
+    ConfirmImprintGuardianSealResult,
+    RegRevivalMercenary = 0x3670,
+    IllusionPyramidGetMyState = 0x3680,
+    IllusionPyramidDrawStage,
+    IllusionPyramidGetResult,
+    IllusionPyramidFinish,
+    IllusionPyramidItemInfo,
+    GetChanceRandomboxPrizeInfo = 0x3690,
+    GetSuperChanceRandomboxState,
+    GetFeverTimeRandomboxState,
+    QuickSlotAdd = 0x36A0,
+    QuickSlotDelete,
+    QuickSlotSwap,
+    RideQuickSlot,
+}
+impl TryFrom<u16> for ClientOpcode {
+    type Error = MsgError;
 
-// COMBAT & SKILLS (0x31xx range estimated)
-pub const REQ_SKILL: u16 = 0x3100;
-pub const REQ_SKILL_ADD: u16 = 0x3101;
-pub const REQ_SKILL_START: u16 = 0x3102;
-pub const REQ_SKILL_DAMAGE: u16 = 0x3103;
-pub const REQ_SKILL_CASTING_START: u16 = 0x3104;
-pub const REQ_SKILL_CASTING_CANCEL: u16 = 0x3105;
-pub const REQ_SKILL_CHANNELING_COMPLETE: u16 = 0x3106;
-pub const REQ_SKILL_CHANNELING_CANCEL: u16 = 0x3107;
-pub const REQ_SKILL_MOVE_START: u16 = 0x3108;
-pub const REQ_SKILL_MOVE_NOTIFY: u16 = 0x3109;
-pub const REQ_SKILL_MOVE_CANCEL: u16 = 0x310A;
-pub const REQ_SKILL_MOVE_END: u16 = 0x310B;
-pub const REQ_SKILL_DAMAGE_TICK: u16 = 0x310C; // DoT effects
-pub const REQ_SKILL_START_ITEM: u16 = 0x310D; // Item-activated skill
-pub const REQ_NORMAL_ATTACK: u16 = 0x3110;
-pub const REQ_DAMAGE_NORMAL_ATTACK: u16 = 0x3111;
-pub const REQ_ARCHER_ATTACK: u16 = 0x3112;
-pub const REQ_AUTO_ATTACK: u16 = 0x3113;
-pub const REQ_AUTO_ATTACK_NOTIFY: u16 = 0x3114;
-
-// INVENTORY & ITEMS (0x32xx range estimated)
-pub const REQ_ITEM_DETAIL_INFO: u16 = 0x3200;
-pub const REQ_ITEM_LIST_IN_NPC: u16 = 0x3201;
-pub const REQ_ITEM_WEAVE_USE: u16 = 0x3202;
-pub const REQ_ITEM_TRANSFORM: u16 = 0x3203;
-pub const REQ_GIVE_EFFECT_TO_ITEM: u16 = 0x3204;
-pub const REQ_OUTFIT_CHANGE_ITEM: u16 = 0x3205;
-pub const REQ_OUTFIT_DIVIDE_RELEASE_ITEM: u16 = 0x3206;
-pub const REQ_EXTEND_TIME_SET_ITEM: u16 = 0x3207;
-pub const REQ_RIDING_EXTEND_ITEM: u16 = 0x3208;
-pub const REQ_SEAL_ITEM: u16 = 0x3209;
-pub const REQ_SEAL_ITEM_CLEAR: u16 = 0x320A;
-
-// CRAFTING & ENHANCEMENT (0x33xx range estimated)
-pub const REQ_REFINE_ITEM: u16 = 0x3300;
-pub const REQ_REFINE_PROBABILITY: u16 = 0x3301;
-pub const REQ_BEGIN_REFINE_SHOP: u16 = 0x3302;
-pub const REQ_CHANGE_REFINE_SHOP_NAME: u16 = 0x3303;
-pub const REQ_REFINE_SHOP_OPEN: u16 = 0x3304;
-pub const REQ_RANDOM_REFINE_COMMISSION: u16 = 0x3305;
-pub const REQ_CHANGE_RANDOM_REFINE_SHOP_NAME: u16 = 0x3306;
-pub const REQ_RANDOM_REFINE_ITEM: u16 = 0x3307;
-pub const REQ_RANDOM_ENFORCE_ITEM: u16 = 0x3308;
-pub const REQ_RANDOM_ENFORCE_ITEM_CONFIRM: u16 = 0x3309;
-pub const REQ_DIRECT_REINFORCE: u16 = 0x330A;
-pub const REQ_TRANSFER_REINFORCE_ITEM: u16 = 0x330B;
-pub const REQ_GRINDING_ITEM_RESET: u16 = 0x330C;
-pub const REQ_INIT_GRINDING_OPT: u16 = 0x330D;
-pub const REQ_BESTROW_ATTRIBUTE: u16 = 0x330E;
-
-// PARTY SYSTEM (0x34xx range estimated)
-pub const REQ_PARTY_SUMMARY: u16 = 0x3400;
-pub const REQ_PARTY_INVITATION: u16 = 0x3401;
-pub const REQ_PARTY_JOIN: u16 = 0x3402;
-pub const REQ_PARTY_OUT: u16 = 0x3403;
-pub const REQ_PARTY_CHANGE_ITEM_RULE: u16 = 0x3404;
-pub const REQ_PARTY_CHANGE_EXP_RULE: u16 = 0x3405;
-pub const REQ_PARTY_CHANGE_MASTER: u16 = 0x3406;
-pub const REQ_PARTY_EXPULSION: u16 = 0x3407;
-pub const REQ_PARTY_NOTICE: u16 = 0x3408;
-pub const REQ_PARTY_RIGHT: u16 = 0x3409;
-pub const REQ_PARTY_CHANGE_GROUP: u16 = 0x340A;
-pub const REQ_PARTY_EFFECT_LIST: u16 = 0x340B;
-pub const REQ_PARTY_DICE_START: u16 = 0x340C;
-pub const REQ_PARTY_DICE_JOIN: u16 = 0x340D;
-pub const REQ_PARTY_DICE_CHATTING_CMD: u16 = 0x340E;
-pub const REQ_PARTY_MEMBER_PC_OID: u16 = 0x340F;
-pub const REQ_PARTY_TACTICS_TARGET: u16 = 0x3410;
-pub const REQ_PARTY_TYPE_CHANGE: u16 = 0x3411;
-pub const REQ_PARTY_FIGHTING_TRIM: u16 = 0x3412;
-pub const REQ_PARTY_FIGHTING_TRIM_VOTE: u16 = 0x3413;
-pub const REQ_PARTY_JURISDICTION_INDUN: u16 = 0x3414;
-pub const REQ_PARTY_SUB_MASTER: u16 = 0x3415;
-pub const REQ_PARTY_FRAME_MOVE: u16 = 0x3416;
-pub const REQ_PARTY_DISMISS_SUB_MASTER: u16 = 0x3417;
-pub const REQ_PARTY_KICK_VOTE: u16 = 0x3418;
-pub const REQ_PARTY_MEMBER_KICK_VOTE_START: u16 = 0x3419;
-
-// Party Matching/Dungeon Finder
-pub const REQ_PARTY_MATCHING_DETAIL: u16 = 0x3420;
-pub const REQ_PARTY_MATCHING_WHISPER: u16 = 0x3421;
-pub const REQ_PARTY_MATCHING_APPLY_MSG: u16 = 0x3422;
-pub const REQ_PARTY_MATCHING_SEARCH_APPLY: u16 = 0x3423;
-pub const REQ_PARTY_MATCHING_FIND_DUNGEON: u16 = 0x3424;
-pub const REQ_PARTY_MATCHING_FIND_DUNGEON_RANDOM: u16 = 0x3425;
-pub const REQ_PARTY_MATCHING_IN_PROGRESS_INFO: u16 = 0x3426;
-pub const REQ_PARTY_MATCHING_FIND_DUNGEON_CANCEL: u16 = 0x3427;
-pub const REQ_PARTY_MATCHING_FIND_DUNGEON_JOIN_SELECT: u16 = 0x3428;
-pub const REQ_PARTY_MATCHING_SEARCH_INVITE: u16 = 0x3429;
-pub const REQ_PARTY_MATCHING_INTO_DUNGEON_PARTICIPATION: u16 = 0x342A;
-pub const REQ_PARTY_MATCHING_OUT_DUNGEON: u16 = 0x342B;
-pub const REQ_PARTY_MATCHING_REJOIN_DUNGEON: u16 = 0x342C;
-
-// GUILD SYSTEM (0x35xx range estimated)
-pub const REQ_GUILD_CREATE: u16 = 0x3500;
-pub const REQ_GUILD_DELETE: u16 = 0x3501;
-pub const REQ_GUILD_MEM_LIST: u16 = 0x3502;
-pub const REQ_GUILD_INVITE_MEMBER: u16 = 0x3503;
-pub const REQ_GUILD_KICK_MEMBER: u16 = 0x3504;
-pub const REQ_GUILD_UNREGISTER_ME: u16 = 0x3505;
-pub const REQ_GUILD_NOTICE_UPDATE: u16 = 0x3506;
-pub const REQ_GUILD_EMBLEM: u16 = 0x3507;
-pub const REQ_GUILD_EMBLEM_UPDATE: u16 = 0x3508;
-pub const REQ_GUILD_AUTHORITY: u16 = 0x3509;
-pub const REQ_GUILD_DEL_AUTHORITY: u16 = 0x350A;
-pub const REQ_GUILD_MODIFY_AUTHORITY: u16 = 0x350B;
-pub const REQ_GUILD_MEMBER_MODIFY_AUTH: u16 = 0x350C;
-pub const REQ_GUILD_MASTER_HANDOVER: u16 = 0x350D;
-pub const REQ_GUILD_STORAGE: u16 = 0x350E;
-pub const REQ_GUILD_STORAGE_ITEM_PUT: u16 = 0x350F;
-pub const REQ_GUILD_STORAGE_ITEM_GET: u16 = 0x3510;
-pub const REQ_GUILD_FUNDS_IN_HAND_DEPOSIT: u16 = 0x3511;
-pub const REQ_GUILD_FUNDS_IN_HAND_WITHDRAW: u16 = 0x3512;
-pub const REQ_GUILD_STORAGE_STATEMENT_ITEM: u16 = 0x3513;
-pub const REQ_GUILD_STORAGE_STATEMENT_ZENY: u16 = 0x3514;
-pub const REQ_GUILD_DEL_POSSIBLE: u16 = 0x3515;
-pub const REQ_GUILD_SKILL_LEARN: u16 = 0x3516;
-pub const REQ_GUILD_SKILL_LIST: u16 = 0x3517;
-pub const REQ_GUILD_SKILL_LEARN_BOOK: u16 = 0x3518;
-pub const REQ_GUILD_EMERGENCY_CALL_ANSWER: u16 = 0x3519;
-pub const REQ_GUILD_TAX_INQUIRY: u16 = 0x351A;
-pub const REQ_GUILD_TAX_WITHDRAW: u16 = 0x351B;
-pub const REQ_GUILD_SELECT_ROBE: u16 = 0x351C;
-pub const REQ_GUILD_LIST_REGISTERED_ROBE: u16 = 0x351D;
-pub const REQ_GUILD_SET_BRIBE_PERCENT: u16 = 0x351E;
-
-// Guild House
-pub const REQ_GUILD_HOUSE_LOTTERY: u16 = 0x3520;
-pub const REQ_GUILD_HOUSE_TICKET: u16 = 0x3521;
-pub const REQ_GUILD_HOUSE_RESULT: u16 = 0x3522;
-pub const REQ_GUILD_HOUSE_LOTTERY_RANK: u16 = 0x3523;
-
-// MISC GAME SYSTEMS (0x36xx+ range estimated)
-pub const REQ_PING: u16 = 0x3600;
-pub const REQ_CUT_SCENE_START: u16 = 0x3601;
-pub const REQ_CUT_SCENE_END: u16 = 0x3602;
-pub const REQ_HELPER_DECLARE: u16 = 0x3603;
-pub const REQ_APPEARANCE_CHANGE: u16 = 0x3604;
-pub const REQ_CHEAT_TOOL: u16 = 0x3605;
-pub const REQ_REVIEW_PC: u16 = 0x3606;
-pub const REQ_ALLOW_ANYONE_REVIEW_ME: u16 = 0x3607;
-pub const REQ_DUNGEON_ENTERANCE_INFO: u16 = 0x3608;
-pub const REQ_DUNGEON_LEVEL_SELECT: u16 = 0x3609;
-pub const REQ_QUESTION_DUNGEON_PARTICIPATION_JOIN: u16 = 0x360A;
-
-// Job/Mastery System
-pub const REQ_JOB_MASTERY_START: u16 = 0x3610;
-pub const REQ_JOB_MASTERY_TRAINING: u16 = 0x3611;
-pub const REQ_JOB_MASTERY_UPGRADE: u16 = 0x3612;
-pub const REQ_JUMPING_LEVELUP: u16 = 0x3613;
-
-// Collections
-pub const REQ_M_COLLECTION: u16 = 0x3620; // Monster collection
-pub const REQ_M_COLLECTION_SELECTED: u16 = 0x3621;
-pub const REQ_M_COLLECTION_COMBINE_PROTEIN: u16 = 0x3622;
-pub const REQ_M_COLLECTION_USE_PROTEIN: u16 = 0x3623;
-pub const REQ_P_COLLECTION: u16 = 0x3624; // Pet collection
-pub const REQ_P_COLLECTION_SELECTED: u16 = 0x3625;
-pub const REQ_P_COLLECTION_COMBINE_EGG_BLANK: u16 = 0x3626;
-pub const REQ_P_COLLECTION_USE_PET_EGG: u16 = 0x3627;
-pub const REQ_P_COLLECTION_INCUBATOR: u16 = 0x3628;
-pub const REQ_P_COLLECTION_EGG_INTO_INCUBATOR: u16 = 0x3629;
-pub const REQ_P_COLLECTION_COLLECT_EGG: u16 = 0x362A;
-pub const REQ_P_COLLECTION_ACTIVE_PET: u16 = 0x362B;
-pub const REQ_P_COLLECTION_SET_ACTIVE_PET: u16 = 0x362C;
-
-// Siege & PvP
-pub const REQ_SIEGE_ARMS_USE_START: u16 = 0x3630;
-pub const REQ_SIEGE_ARMS_USE_END: u16 = 0x3631;
-pub const REQ_SIEGE_ARMS_ROTATION_START: u16 = 0x3632;
-pub const REQ_SIEGE_ARMS_ROTATION_STOP: u16 = 0x3633;
-pub const REQ_SIEGE_ARMS_USE_SKILL: u16 = 0x3634;
-
-// Arena/Colosseum/Training Room
-pub const REQ_T_ROOM_JOIN: u16 = 0x3640;
-pub const REQ_T_ROOM_IN: u16 = 0x3641;
-pub const REQ_T_ROOM_OUT: u16 = 0x3642;
-pub const REQ_T_ROOM_IN_CANCEL: u16 = 0x3643;
-
-// Ranking
-pub const REQ_RANKING: u16 = 0x3650;
-pub const REQ_RANKING_LIST: u16 = 0x3651;
-pub const REQ_RANKER_LIST: u16 = 0x3652;
-pub const REQ_RANKER_BUFF: u16 = 0x3653;
-
-// Events & Rewards
-pub const REQ_ATTENDANCE_REWARD: u16 = 0x3660;
-pub const REQ_ATTENDANCE_REWARD_GET_ITEM: u16 = 0x3661;
-pub const REQ_PLAY_TIME_REWARD: u16 = 0x3662;
-pub const REQ_PLAY_TIME_REWARD_GET_ITEM: u16 = 0x3663;
-pub const REQ_SHOW_ATTENDANCE_STATE: u16 = 0x3664;
-pub const REQ_MAKE_OFFERINGS: u16 = 0x3665;
-pub const REQ_IMPRINT_GUARDIAN_SEAL: u16 = 0x3666;
-pub const REQ_CONFIRM_IMPRINT_GUARDIAN_SEAL_RESULT: u16 = 0x3667;
-
-// Mercenary/Companion
-pub const REQ_REG_REVIVAL_MERCENARY: u16 = 0x3670;
-
-// Special Dungeons
-pub const REQ_ILLUSION_PYRAMID_GET_MY_STATE: u16 = 0x3680;
-pub const REQ_ILLUSION_PYRAMID_DRAW_STAGE: u16 = 0x3681;
-pub const REQ_ILLUSION_PYRAMID_GET_RESULT: u16 = 0x3682;
-pub const REQ_ILLUSION_PYRAMID_FINISH: u16 = 0x3683;
-pub const REQ_ILLUSION_PYRAMID_ITEM_INFO: u16 = 0x3684;
-
-// Randombox/Gacha
-pub const REQ_GET_CHANCE_RANDOMBOX_PRIZE_INFO: u16 = 0x3690;
-pub const REQ_GET_SUPER_CHANCE_RANDOMBOX_STATE: u16 = 0x3691;
-pub const REQ_GET_FEVER_TIME_RANDOMBOX_STATE: u16 = 0x3692;
-
-// Quick Slot
-pub const REQ_QUICK_SLOT_ADD: u16 = 0x36A0;
-pub const REQ_QUICK_SLOT_DEL: u16 = 0x36A1;
-pub const REQ_QUICK_SLOT_SWAP: u16 = 0x36A2;
-pub const REQ_RIDING_QUICK_SLOT: u16 = 0x36A3;
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            0x2EE2 => Ok(ClientOpcode::Login),
+            0x2EE3 => Ok(ClientOpcode::CreateCharacter),
+            0x2EE4 => Ok(ClientOpcode::DeleteCharacter),
+            0x2EE5 => Ok(ClientOpcode::CharacterList),
+            0x2EE6 => Ok(ClientOpcode::EnterWorld),
+            0x2EE7 => Ok(ClientOpcode::LoginConfirm),
+            0x3000 => Ok(ClientOpcode::Teleport),
+            0x3001 => Ok(ClientOpcode::TeleportSavePoint),
+            0x3002 => Ok(ClientOpcode::MultiTeleportNPC),
+            0x3003 => Ok(ClientOpcode::SkillTeleport),
+            0x3004 => Ok(ClientOpcode::GliderTeleport),
+            0x3005 => Ok(ClientOpcode::GuildHouseTeleport),
+            0x3006 => Ok(ClientOpcode::PartyDungeonTeleport),
+            0x30D5 => Ok(ClientOpcode::MoveStart),
+            0x30D6 => Ok(ClientOpcode::MoveStop),
+            0x3100 => Ok(ClientOpcode::Skill),
+            0x3101 => Ok(ClientOpcode::SkillAdd),
+            0x3102 => Ok(ClientOpcode::SkillStart),
+            0x3103 => Ok(ClientOpcode::SkillDamage),
+            0x3104 => Ok(ClientOpcode::SkillCastStart),
+            0x3105 => Ok(ClientOpcode::SkillCastCancel),
+            0x3106 => Ok(ClientOpcode::SkillChannelComplete),
+            0x3107 => Ok(ClientOpcode::SkillChannelCancel),
+            0x3108 => Ok(ClientOpcode::SkillMoveStart),
+            0x3109 => Ok(ClientOpcode::SkillMoveNotify),
+            0x310A => Ok(ClientOpcode::SkillMoveCancel),
+            0x310B => Ok(ClientOpcode::SkillMoveEnd),
+            0x310C => Ok(ClientOpcode::SkillDamageTick),
+            0x310D => Ok(ClientOpcode::SkillStartItem),
+            0x3110 => Ok(ClientOpcode::NormalAttack),
+            0x3111 => Ok(ClientOpcode::DamageNormalAttack),
+            0x3112 => Ok(ClientOpcode::ArcherAttack),
+            0x3113 => Ok(ClientOpcode::AutoAttack),
+            0x3114 => Ok(ClientOpcode::AutoAttackNotify),
+            0x3200 => Ok(ClientOpcode::ItemDetailInfo),
+            0x3201 => Ok(ClientOpcode::ItemListInNPC),
+            0x3202 => Ok(ClientOpcode::ItemWeaveUse),
+            0x3203 => Ok(ClientOpcode::ItemTransform),
+            0x3204 => Ok(ClientOpcode::GiveEffectToItem),
+            0x3205 => Ok(ClientOpcode::OutfitChangeItem),
+            0x3206 => Ok(ClientOpcode::OutfitDivideReleaseItem),
+            0x3207 => Ok(ClientOpcode::ExtendTimeSetItem),
+            0x3208 => Ok(ClientOpcode::RideExtendItem),
+            0x3300 => Ok(ClientOpcode::RefineItem),
+            0x3301 => Ok(ClientOpcode::RefineProbability),
+            0x3302 => Ok(ClientOpcode::BeginRefineShop),
+            0x3303 => Ok(ClientOpcode::ChangeRefineShopName),
+            0x3304 => Ok(ClientOpcode::RefineShopOpen),
+            0x3305 => Ok(ClientOpcode::RandomRefineCommission),
+            0x3306 => Ok(ClientOpcode::ChangeRandomRefineShopName),
+            0x3307 => Ok(ClientOpcode::RandomRefineItem),
+            0x3308 => Ok(ClientOpcode::RandomEnforceItem),
+            0x3309 => Ok(ClientOpcode::RandomEnforceItemConfirm),
+            0x330A => Ok(ClientOpcode::DirectReinforce),
+            0x330B => Ok(ClientOpcode::TransferReinforceItem),
+            0x330C => Ok(ClientOpcode::GrindingItemReset),
+            0x330D => Ok(ClientOpcode::InitGrindingOpt),
+            0x330E => Ok(ClientOpcode::BestrowAttribute),
+            0x3400 => Ok(ClientOpcode::PartySummary),
+            0x3401 => Ok(ClientOpcode::PartyInvitation),
+            0x3402 => Ok(ClientOpcode::PartyJoin),
+            0x3403 => Ok(ClientOpcode::PartyOut),
+            0x3404 => Ok(ClientOpcode::PartyChangeItemRule),
+            0x3405 => Ok(ClientOpcode::PartyChangeExpRule),
+            0x3406 => Ok(ClientOpcode::PartyChangeMaster),
+            0x3407 => Ok(ClientOpcode::PartyExpulsion),
+            0x3408 => Ok(ClientOpcode::PartyNotice),
+            0x3409 => Ok(ClientOpcode::PartyRight),
+            0x340A => Ok(ClientOpcode::PartyChangeGroup),
+            0x340B => Ok(ClientOpcode::PartyEffectList),
+            0x340C => Ok(ClientOpcode::PartyDiceStart),
+            0x340D => Ok(ClientOpcode::PartyDiceJoin),
+            0x340E => Ok(ClientOpcode::PartyDiceChatCmd),
+            0x340F => Ok(ClientOpcode::PartyMemberPCOID),
+            0x3410 => Ok(ClientOpcode::PartyTacticsTarget),
+            0x3411 => Ok(ClientOpcode::PartyTypeChange),
+            0x3412 => Ok(ClientOpcode::PartyFightTrim),
+            0x3413 => Ok(ClientOpcode::PartyFightTrimVote),
+            0x3414 => Ok(ClientOpcode::PartyJurisdictionIndun),
+            0x3415 => Ok(ClientOpcode::PartySubMaster),
+            0x3416 => Ok(ClientOpcode::PartyFrameMove),
+            0x3417 => Ok(ClientOpcode::PartyDismissSubMaster),
+            0x3418 => Ok(ClientOpcode::PartyKickVote),
+            0x3419 => Ok(ClientOpcode::PartyMemberKickVoteStart),
+            0x3500 => Ok(ClientOpcode::GuildCreate),
+            0x3501 => Ok(ClientOpcode::GuildDelete),
+            0x3502 => Ok(ClientOpcode::GuildMemList),
+            0x3503 => Ok(ClientOpcode::GuildInviteMember),
+            0x3504 => Ok(ClientOpcode::GuildKickMember),
+            0x3505 => Ok(ClientOpcode::GuildUnregisterMe),
+            0x3506 => Ok(ClientOpcode::GuildNoticeUpdate),
+            0x3507 => Ok(ClientOpcode::GuildEmblem),
+            0x3508 => Ok(ClientOpcode::GuildEmblemUpdate),
+            0x3509 => Ok(ClientOpcode::GuildAuthority),
+            0x350A => Ok(ClientOpcode::GuildDelAuthority),
+            0x350B => Ok(ClientOpcode::GuildModifyAuthority),
+            0x350C => Ok(ClientOpcode::GuildMemberModifyAuth),
+            0x350D => Ok(ClientOpcode::GuildMasterHandover),
+            0x350E => Ok(ClientOpcode::GuildStorage),
+            0x350F => Ok(ClientOpcode::GuildStorageItemPut),
+            0x3510 => Ok(ClientOpcode::GuildStorageItemGet),
+            0x3511 => Ok(ClientOpcode::GuildFundsInHandDeposit),
+            0x3512 => Ok(ClientOpcode::GuildFundsInHandWithdraw),
+            0x3513 => Ok(ClientOpcode::GuildStorageStatementItem),
+            0x3514 => Ok(ClientOpcode::GuildStorageStatementZeny),
+            0x3515 => Ok(ClientOpcode::GuildDelPossible),
+            0x3516 => Ok(ClientOpcode::GuildSkillLearn),
+            0x3517 => Ok(ClientOpcode::GuildSkillList),
+            0x3518 => Ok(ClientOpcode::GuildSkillLearnBook),
+            0x3519 => Ok(ClientOpcode::GuildEmergencyCallAnswer),
+            0x351A => Ok(ClientOpcode::GuildTaxInquiry),
+            0x351B => Ok(ClientOpcode::GuildTaxWithdraw),
+            0x351C => Ok(ClientOpcode::GuildSelectRobe),
+            0x351D => Ok(ClientOpcode::GuildListRegisteredRobe),
+            0x351E => Ok(ClientOpcode::GuildSetBribePercent),
+            0x3600 => Ok(ClientOpcode::Ping),
+            0x3601 => Ok(ClientOpcode::CutSceneStart),
+            0x3602 => Ok(ClientOpcode::CutSceneEnd),
+            0x3603 => Ok(ClientOpcode::HelperDeclare),
+            0x3604 => Ok(ClientOpcode::AppearanceChange),
+            0x3605 => Ok(ClientOpcode::CheatTool),
+            0x3606 => Ok(ClientOpcode::ReviewPC),
+            0x3607 => Ok(ClientOpcode::AllowAnyoneReviewMe),
+            0x3608 => Ok(ClientOpcode::DungeonEntranceInfo),
+            0x3609 => Ok(ClientOpcode::DungeonLevelSelect),
+            0x360A => Ok(ClientOpcode::QuestionDungeonParticipateJoin),
+            0x3610 => Ok(ClientOpcode::JobMasteryStart),
+            0x3611 => Ok(ClientOpcode::JobMasteryTrain),
+            0x3612 => Ok(ClientOpcode::JobMasteryUpgrade),
+            0x3613 => Ok(ClientOpcode::JumpLevelUp),
+            0x3620 => Ok(ClientOpcode::MonsterCollection),
+            0x3621 => Ok(ClientOpcode::MonsterCollectionSelect),
+            0x3622 => Ok(ClientOpcode::MonsterCollectionCombineProtein),
+            0x3623 => Ok(ClientOpcode::MonsterCollectionUseProtein),
+            0x3624 => Ok(ClientOpcode::PetCollection),
+            0x3625 => Ok(ClientOpcode::PetCollectionSelect),
+            0x3626 => Ok(ClientOpcode::PetCollectionCombineEggBlank),
+            0x3627 => Ok(ClientOpcode::PetCollectionUsePetEgg),
+            0x3628 => Ok(ClientOpcode::PetCollectionIncubator),
+            0x3629 => Ok(ClientOpcode::PetCollectionEggIntoIncubator),
+            0x362A => Ok(ClientOpcode::PetCollectionCollectEgg),
+            0x362B => Ok(ClientOpcode::PetCollectionActivePet),
+            0x362C => Ok(ClientOpcode::PetCollectionSetActivePet),
+            0x3630 => Ok(ClientOpcode::SiegeArmsUseStart),
+            0x3631 => Ok(ClientOpcode::SiegeArmsUseEnd),
+            0x3632 => Ok(ClientOpcode::SiegeArmsRotateStart),
+            0x3633 => Ok(ClientOpcode::SiegeArmsRotateStop),
+            0x3634 => Ok(ClientOpcode::SiegeArmsUseSkill),
+            0x3640 => Ok(ClientOpcode::TrainingRoomJoin),
+            0x3641 => Ok(ClientOpcode::TrainingRoomIn),
+            0x3642 => Ok(ClientOpcode::TrainingRoomOut),
+            0x3643 => Ok(ClientOpcode::TrainingRoomInCancel),
+            0x3650 => Ok(ClientOpcode::Rank),
+            0x3651 => Ok(ClientOpcode::RankList),
+            0x3652 => Ok(ClientOpcode::RankerList),
+            0x3653 => Ok(ClientOpcode::RankerBuff),
+            0x3660 => Ok(ClientOpcode::AttendanceReward),
+            0x3661 => Ok(ClientOpcode::AttendanceRewardGetItem),
+            0x3662 => Ok(ClientOpcode::PlayTimeReward),
+            0x3663 => Ok(ClientOpcode::PlayTimeRewardGetItem),
+            0x3664 => Ok(ClientOpcode::ShowAttendanceState),
+            0x3665 => Ok(ClientOpcode::MakeOfferings),
+            0x3666 => Ok(ClientOpcode::ImprintGuardianSeal),
+            0x3667 => Ok(ClientOpcode::ConfirmImprintGuardianSealResult),
+            0x3670 => Ok(ClientOpcode::RegRevivalMercenary),
+            0x3680 => Ok(ClientOpcode::IllusionPyramidGetMyState),
+            0x3681 => Ok(ClientOpcode::IllusionPyramidDrawStage),
+            0x3682 => Ok(ClientOpcode::IllusionPyramidGetResult),
+            0x3683 => Ok(ClientOpcode::IllusionPyramidFinish),
+            0x3684 => Ok(ClientOpcode::IllusionPyramidItemInfo),
+            0x3690 => Ok(ClientOpcode::GetChanceRandomboxPrizeInfo),
+            0x3691 => Ok(ClientOpcode::GetSuperChanceRandomboxState),
+            0x3692 => Ok(ClientOpcode::GetFeverTimeRandomboxState),
+            0x36A0 => Ok(ClientOpcode::QuickSlotAdd),
+            0x36A1 => Ok(ClientOpcode::QuickSlotDelete),
+            0x36A2 => Ok(ClientOpcode::QuickSlotSwap),
+            0x36A3 => Ok(ClientOpcode::RideQuickSlot),
+            _ => Err(MsgError::UnknownOpcode(value)),
+        }
+    }
+}
