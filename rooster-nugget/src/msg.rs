@@ -1,23 +1,16 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use flate2::{Compress, Compression, FlushCompress};
 
 use crate::{MsgError, MsgResult};
 
+/// The length of the message header in bytes.
+const HEADER_LEN: usize = 4;
+
+/// The magic number used to identify valid packets.
+const PACKET_MAGIC: u16 = 0x5713;
+
 /// The threshold above which messages are compressed.
 const UNCOMPRESSED_THRESHOLD: usize = 50;
-
-/// Enumeration of message types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum MsgType {
-    RemoteMethodInvocation = 1,
-    User,
-    EncryptedSessionKey,
-    UnreliableRelay,
-    ReliableRelay,
-    P2PHolepunch,
-    P2PDirect,
-    Internal,
-}
 
 /// Represents a message with a byte buffer and bit-level access.
 #[derive(Debug)]
@@ -31,22 +24,46 @@ pub struct Message {
 impl Message {
     /// Creates a new empty message.
     pub fn new() -> Self {
-        Self {
+        let mut msg = Message {
             buffer: BytesMut::new(),
             read_pos: 0,
             bit_buffer: 0,
             bit_offset: 0,
-        }
+        };
+
+        msg.write_u16(PACKET_MAGIC);
+        msg
     }
 
     /// Creates a new message with the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
+        let mut msg = Message {
             buffer: BytesMut::with_capacity(capacity),
             read_pos: 0,
             bit_buffer: 0,
             bit_offset: 0,
-        }
+        };
+
+        msg.write_u16(PACKET_MAGIC);
+        msg
+    }
+
+    /// Compresses the message buffer using DEFLATE compression.
+    pub fn compress(&mut self) -> MsgResult<()> {
+        let mut compressor = Compress::new(Compression::new(4), false);
+        let mut compressed = Vec::new();
+
+        compressor
+            .compress_vec(
+                &self.buffer[HEADER_LEN..],
+                &mut compressed,
+                FlushCompress::Finish,
+            )
+            .map_err(|e| MsgError::Compress(e))?;
+        self.buffer[HEADER_LEN..].fill(0);
+        self.buffer[HEADER_LEN..].copy_from_slice(&compressed);
+
+        Ok(())
     }
 
     /// Checks if the message buffer is empty.
@@ -75,7 +92,7 @@ impl Message {
         if self.read_pos + 4 > self.buffer.len() {
             return Err(MsgError::Underflow(4));
         }
-        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_f32();
+        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_f32_le();
         self.read_pos += 4;
         Ok(value)
     }
@@ -85,7 +102,7 @@ impl Message {
         if self.read_pos + 4 > self.buffer.len() {
             return Err(MsgError::Underflow(4));
         }
-        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_i32();
+        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_i32_le();
         self.read_pos += 4;
         Ok(value)
     }
@@ -98,8 +115,7 @@ impl Message {
         }
         let string_bytes = &self.buffer[self.read_pos..self.read_pos + length];
         self.read_pos += length;
-        let string = String::from_utf8(string_bytes.to_vec())
-            .map_err(|e| MsgError::Parse(format!("Invalid UTF-8 string: {}", e)))?;
+        let string = String::from_utf8(string_bytes.to_vec()).map_err(|e| MsgError::Utf8(e))?;
         Ok(string)
     }
 
@@ -118,7 +134,7 @@ impl Message {
         if self.read_pos + 2 > self.buffer.len() {
             return Err(MsgError::Underflow(2));
         }
-        let value = (&self.buffer[self.read_pos..self.read_pos + 2]).get_u16();
+        let value = (&self.buffer[self.read_pos..self.read_pos + 2]).get_u16_le();
         self.read_pos += 2;
         Ok(value)
     }
@@ -128,7 +144,7 @@ impl Message {
         if self.read_pos + 4 > self.buffer.len() {
             return Err(MsgError::Underflow(4));
         }
-        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_u32();
+        let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_u32_le();
         self.read_pos += 4;
         Ok(value)
     }
@@ -138,9 +154,27 @@ impl Message {
         if self.read_pos + 8 > self.buffer.len() {
             return Err(MsgError::Underflow(8));
         }
-        let value = (&self.buffer[self.read_pos..self.read_pos + 8]).get_u64();
+        let value = (&self.buffer[self.read_pos..self.read_pos + 8]).get_u64_le();
         self.read_pos += 8;
         Ok(value)
+    }
+
+    /// Reads a Unicode string from the message buffer in UTF-16 encoding.
+    pub fn read_unicode(&mut self) -> MsgResult<String> {
+        let length = self.read_u16()? as usize;
+        let byte_length = length * 2;
+
+        if self.read_pos + byte_length > self.buffer.len() {
+            return Err(MsgError::Underflow(byte_length));
+        }
+
+        let mut utf16: Vec<u16> = Vec::with_capacity(length);
+        for _ in 0..length {
+            let code_unit = self.read_u16()?;
+            utf16.push(code_unit);
+        }
+
+        String::from_utf16(&utf16).map_err(|e| MsgError::Utf16(e))
     }
 
     /// Returns the number of remaining unread bytes in the message buffer.
@@ -155,7 +189,7 @@ impl Message {
 
     /// Determines if the message should be compressed based on its length.
     pub fn should_compress(&self) -> bool {
-        self.buffer.len() > UNCOMPRESSED_THRESHOLD
+        (self.buffer.len() - HEADER_LEN) > UNCOMPRESSED_THRESHOLD
     }
 
     /// Writes a specified number of bits from a u32 value to the message buffer.
@@ -211,6 +245,11 @@ impl Message {
         self.buffer.put_i32_le(value);
     }
 
+    /// Writes a 64-bit signed integer to the message buffer.
+    pub fn write_i64(&mut self, value: i64) {
+        self.buffer.put_i64_le(value);
+    }
+
     /// Writes raw bytes to the message buffer without any length prefix.
     pub fn write_raw(&mut self, data: &[u8]) {
         self.flush_bits();
@@ -243,6 +282,16 @@ impl Message {
     /// Writes a 64-bit unsigned integer to the message buffer.
     pub fn write_u64(&mut self, value: u64) {
         self.buffer.put_u64_le(value);
+    }
+
+    /// Writes a Unicode string to the message buffer in UTF-16 encoding,
+    pub fn write_unicode(&mut self, value: &str) {
+        self.flush_bits();
+        let utf16: Vec<u16> = value.encode_utf16().collect();
+        self.write_u16(utf16.len() as u16);
+        for code_unit in utf16 {
+            self.write_u16(code_unit);
+        }
     }
 
     /// Flushes any remaining bits in the bit buffer to the main buffer.

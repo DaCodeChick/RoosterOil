@@ -1,8 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::{Compress, Compression, FlushCompress};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{CryptoContext, Message, MsgError, MsgResult, MsgType};
+use crate::{CryptoContext, Message, MsgError, MsgResult};
 
 /// Represents a Remote Method Invocation (RMI) packet.
 #[derive(Debug)]
@@ -10,20 +9,22 @@ pub struct RMIPacket(Message);
 
 impl RMIPacket {
     /// Creates a new RMI packet with the specified opcode.
-    pub fn new(opcode: u16) -> Self {
-        let mut msg = Message::with_capacity(64);
-        msg.write_u8(MsgType::RemoteMethodInvocation as u8);
-        msg.write_u16(opcode);
-        Self(msg)
+    pub fn new(_opcode: u16) -> Self {
+        Self(Message::with_capacity(64))
     }
 
     /// Finalizes and returns the constructed RMI packet.
     pub fn build(mut self) -> MsgResult<Message> {
         if self.0.should_compress() {
-            self.compress()?;
+            self.0.compress()?;
         }
 
         Ok(self.0)
+    }
+
+    /// Adds an i64 payload to the RMI packet.
+    pub fn with_i64(&mut self, value: i64) {
+        self.0.write_i64(value);
     }
 
     /// Adds a string payload to the RMI packet.
@@ -44,17 +45,16 @@ impl RMIPacket {
         self
     }
 
-    /// Compresses the RMI packet using the specified compression level.
-    fn compress(&mut self) -> MsgResult<()> {
-        let mut compressor = Compress::new(Compression::new(4), false);
-        let mut compressed = Vec::new();
-        let input = self.0.as_ref();
+    /// Adds a u64 payload to the RMI packet.
+    pub fn with_u64(mut self, value: u64) -> Self {
+        self.0.write_u64(value);
+        self
+    }
 
-        compressor
-            .compress_vec(input, &mut compressed, FlushCompress::Finish)
-            .map_err(|e| MsgError::Compress(e))?;
-        self.0 = Message::from(&compressed[..]);
-        Ok(())
+    /// Adds a Unicode string payload to the RMI packet.
+    pub fn with_unicode(mut self, value: &str) -> Self {
+        self.0.write_unicode(value);
+        self
     }
 }
 

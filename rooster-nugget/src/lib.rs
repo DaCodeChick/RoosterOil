@@ -1,18 +1,15 @@
 use flate2::{CompressError, DecompressError};
 use std::io;
+use std::string::{FromUtf8Error, FromUtf16Error};
 use thiserror::Error;
 
-pub mod client_op;
 pub mod crypt;
 pub mod msg;
 pub mod net;
-pub mod server_op;
 
-pub use client_op::*;
 pub use crypt::*;
 pub use msg::*;
 pub use net::*;
-pub use server_op::*;
 
 /// Error type for message operations.
 #[derive(Debug, Error)]
@@ -37,17 +34,14 @@ pub enum MsgError {
     Parse(String),
     #[error("Underflow error, bytes Reqed: {0}")]
     Underflow(usize),
+    #[error("UTF-16 conversion error: {0}")]
+    Utf16(#[from] FromUtf16Error),
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8(#[from] FromUtf8Error),
 }
 
 /// Result type for message operations.
 pub type MsgResult<T> = Result<T, MsgError>;
-
-/// Enum representing either a client or server opcode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Opcode {
-    Client(ClientOpcode),
-    Server(ServerOpcode),
-}
 
 pub const LOBBY_PORT: u16 = 7201;
 pub const LOGIN_PORT: u16 = 7101;
