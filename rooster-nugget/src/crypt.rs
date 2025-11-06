@@ -1,129 +1,300 @@
-use aes::Aes256;
+use std::io::Bytes;
+
+use aes::{Aes128, Aes256, KeyInit};
 use bytes::{Bytes, BytesMut};
-use cfb_mode::{Decryptor, Encryptor};
-use cipher::{AsyncStreamCipher, KeyIvInit};
+use cbc::{Decryptor as CBCDec, Encryptor as CBCEnc};
+use cfg_if::cfg_if;
+use cipher::{BlockDecrypt, BlockEncrypt, block_padding::Pkcs7};
+use crc32fast;
+use ctr::Ctr128BE;
+use ecb::{Decryptor as ECBDec, Encryptor as ECBEnc};
+use rand::{RngCore, rngs::OsRng};
+use rsa::{Hash, PaddingScheme, RsaPrivateKey, RsaPublicKey, pkcs8::EncodePublicKey};
+use sha2::Sha256;
 
 use crate::{MsgError, MsgResult};
 
-/// Represents a cryptographic context for message encryption and decryption.
-#[derive(Debug)]
-pub struct CryptoContext {
-    session_key: Option<Bytes>,
-    encrypt_counter: u64,
-    decrypt_counter: u64,
+/// Supported cipher modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CipherMode {
+    Ecb = 0,
+    Cbc,
+    Ctr,
 }
 
-impl CryptoContext {
-    /// Creates a new cryptographic context with no session key.
+/// Represents a keyring containing strong and fast keys along with an initialization vector.
+#[derive(Debug, Clone)]
+pub struct Keyring {
+    strong: [u8; 32],
+    fast: [u8; 16],
+    iv: [u8; 16],
+}
+
+impl Keyring {
+    /// Creates a new keyring with random keys.
     pub fn new() -> Self {
-        Self {
-            session_key: None,
-            encrypt_counter: 0,
-            decrypt_counter: 0,
-        }
+        let mut strong = [0u8; 32];
+        let mut fast = [0u8; 16];
+        let mut iv = [0u8; 16];
+
+        RngCore::fill_bytes(&mut OsRng, &mut strong);
+        RngCore::fill_bytes(&mut OsRng, &mut fast);
+        RngCore::fill_bytes(&mut OsRng, &mut iv);
+
+        Self { strong, fast, iv }
+    }
+}
+
+/// Represents the AES cryptographic context.
+#[derive(Debug, Clone)]
+pub struct AesContext(Keyring);
+
+impl AesContext {
+    /// Creates a new AES context with the provided keyring.
+    pub fn new(keyring: Keyring) -> Self {
+        Self(keyring)
     }
 
-    /// Sets the session key for encryption and decryption.
-    pub fn set_session_key(&mut self, key: BytesMut) -> MsgResult<()> {
-        if ![16, 24, 32].contains(&key.len()) {
-            return Err(MsgError::KeyLength(key.len()));
+    /// Decrypts data using AES-128 in fast mode.
+    pub fn decrypt_fast(&self, data: &[u8], mode: CipherMode) -> MsgResult<Bytes> {
+        match mode {
+            CipherMode::Ecb => self.aes128_ecb_decrypt(data),
+            CipherMode::Cbc => self.aes128_cbc_decrypt(data),
+            CipherMode::Ctr => self.aes128_ctr_crypt(data),
         }
-
-        let mut padded_key = key;
-        if padded_key.len() < 32 {
-            padded_key.resize(32, 0);
-        }
-
-        self.session_key = Some(padded_key.freeze());
-        Ok(())
+        .map(Bytes::from)
     }
 
-    /// Checks if a session key is set.
-    pub fn has_key(&self) -> bool {
-        self.session_key.is_some()
-    }
-
-    /// Encrypts the given data using AES CFB mode.
-    pub fn encrypt(&mut self, data: &mut [u8]) -> MsgResult<()> {
-        let key = match &self.session_key {
-            Some(k) => k,
-            None => return Err(MsgError::KeyInit),
+    /// Decrypts data using AES-256 with CRC32 checksum verification.
+    pub fn decrypt_strong(&self, data: &[u8], mode: CipherMode) -> MsgResult<Bytes> {
+        let decrypted_data = match mode {
+            CipherMode::Ecb => self.aes256_ecb_decrypt(data)?,
+            CipherMode::Cbc => self.aes256_cbc_decrypt(data)?,
+            CipherMode::Ctr => self.aes256_ctr_crypt(data)?,
         };
 
-        let iv = counter_to_iv(self.encrypt_counter);
-        let cipher = Encryptor::<Aes256>::new_from_slices(key, &iv)
-            .map_err(|e| MsgError::CipherInit(e.to_string()))?;
+        if decrypted_data.len() < 4 {
+            return Err(MsgError::Aes);
+        }
 
-        cipher.encrypt(data);
-        self.encrypt_counter += 1;
+        let (crc_bytes, payload) = decrypted_data.split_at(4);
+        let received_crc =
+            u32::from_le_bytes([crc_bytes[0], crc_bytes[1], crc_bytes[2], crc_bytes[3]]);
+        let computed_crc = crc32fast::hash(payload);
+
+        if received_crc != computed_crc {
+            return Err(MsgError::CrcMismatch(computed_crc, received_crc));
+        }
+
+        Ok(Bytes::from(payload.to_vec()))
+    }
+
+    /// Encrypts data using AES-128 in fast mode.
+    pub fn encrypt_fast(&self, data: &[u8], mode: CipherMode) -> MsgResult<Bytes> {
+        match mode {
+            CipherMode::Ecb => self.aes128_ecb_encrypt(data),
+            CipherMode::Cbc => self.aes128_cbc_encrypt(data),
+            CipherMode::Ctr => self.aes128_ctr_crypt(data),
+        }
+        .map(Bytes::from)
+    }
+
+    /// Encrypts data using AES-256 with CRC32 checksum prepended.
+    pub fn encrypt_strong(&self, data: &[u8], mode: CipherMode) -> MsgResult<Bytes> {
+        let crc = crc32fast::hash(data);
+        let mut buffer = BytesMut::with_capacity(data.len() + 4);
+
+        buffer.extend_from_slice(&crc.to_le_bytes());
+        buffer.extend_from_slice(data);
+
+        match mode {
+            CipherMode::Ecb => self.aes256_ecb_encrypt(&buffer),
+            CipherMode::Cbc => self.aes256_cbc_encrypt(&buffer),
+            CipherMode::Ctr => self.aes256_ctr_crypt(&buffer),
+        }
+        .map(Bytes::from)
+    }
+
+    /// Decrypts data using AES-128 in CBC mode.
+    fn aes128_cbc_decrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher = CBCDec::<Aes128>::new_from_slice(&self.fast, &self.iv[..16])
+            .map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .decrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts data using AES-128 in CBC mode.
+    fn aes128_cbc_encrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher = CBCEnc::<Aes128>::new_from_slice(&self.fast, &self.iv[..16])
+            .map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .encrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts and decrypts data using AES-128 in CTR mode.
+    fn aes128_ctr_crypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher = Ctr128BE::new_from_slices(&self.fast, &self.iv[..16])
+            .map_err(|_| MsgError::KeyLength)?;
+        let mut buffer = data.to_vec();
+
+        cipher.apply_keystream(&mut buffer);
+        Ok(buffer)
+    }
+
+    /// Decrypts data using AES-128 in ECB mode.
+    fn aes128_ecb_decrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher =
+            ECBDec::<Aes128>::new_from_slice(&self.fast).map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .decrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts data using AES-128 in ECB mode.
+    fn aes128_ecb_encrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher =
+            ECBEnc::<Aes128>::new_from_slice(&self.fast).map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .encrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Decrypts data using AES-256 in CBC mode.
+    fn aes256_cbc_decrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher = CBCDec::<Aes256>::new_from_slices(&self.strong, &self.iv)
+            .map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .decrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts data using AES-256 in CBC mode.
+    fn aes256_cbc_encrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher = CBCEnc::<Aes256>::new_from_slices(&self.strong, &self.iv)
+            .map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .encrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts and decrypts data using AES-256 in CTR mode.
+    fn aes256_ctr_crypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher =
+            Ctr128BE::new_from_slices(&self.strong, &self.iv).map_err(|_| MsgError::KeyLength)?;
+        let mut buffer = data.to_vec();
+
+        cipher.apply_keystream(&mut buffer);
+        Ok(buffer)
+    }
+
+    /// Decrypts data using AES-256 in ECB mode.
+    fn aes256_ecb_decrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher =
+            ECBDec::<Aes256>::new_from_slice(&self.strong).map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .decrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+
+    /// Encrypts data using AES-256 in ECB mode.
+    fn aes256_ecb_encrypt(&self, data: &[u8]) -> MsgResult<Vec<u8>> {
+        let cipher =
+            ECBEnc::<Aes256>::new_from_slice(&self.strong).map_err(|_| MsgError::KeyLength)?;
+        cipher
+            .encrypt_padded_vec_mut::<Pkcs7>(data)
+            .map_err(|_| MsgError::Aes)
+    }
+}
+
+/// Represents the RSA cryptographic context.
+#[derive(Debug, Clone)]
+pub struct RsaContext {
+    private_key: RsaPrivateKey,
+    public_key: RsaPublicKey,
+}
+
+impl RsaContext {
+    pub fn new(key_size: usize) -> MsgResult<Self> {
+        let private_key = RsaPrivateKey::new(&mut OsRng, key_size)?;
+        let public_key = RsaPublicKey::from(&private_key);
+
+        Ok(Self {
+            private_key,
+            public_key,
+        })
+    }
+
+    cfg_if! {
+        if #[cfg(feature = "server")] {
+            /// Decrypts an encrypted keyring using the RSA private key.
+            pub fn decrypt_keyring(&self, data: &[u8]) -> MsgResult<Keyring> {
+                let decrypted = self
+                    .private_key
+                    .decrypt(PaddingScheme::new_pkcs1v15_encrypt(), data)?;
+
+                if decrypted.len() != 64 {
+                    return Err(MsgError::KeyLength);
+                }
+
+                let mut strong = [0u8; 32];
+                let mut fast = [0u8; 16];
+                let mut iv = [0u8; 16];
+
+                strong.copy_from_slice(&decrypted[0..32]);
+                fast.copy_from_slice(&decrypted[32..48]);
+                iv.copy_from_slice(&decrypted[48..64]);
+
+                Ok(Keyring { strong, fast, iv })
+            }
+
+            /// Signs data using the RSA private key.
+            pub fn sign_data(&self, data: &[u8]) -> MsgResult<Bytes> {
+                let digest = Sha256::digest(data);
+
+                let signature = self.private_key.sign(
+                    PaddingScheme::new_pkcs1v15_sign::<Sha256>(),
+                    &digest,
+                )?;
+
+                Ok(Bytes::from(signature))
+            }
+        }
+    }
+
+    /// Encrypts a keyring using the RSA public key.
+    pub fn encrypt_keyring(&self, keyring: &Keyring) -> MsgResult<Bytes> {
+        let mut buffer = BytesMut::with_capacity(64);
+
+        buffer.extend_from_slice(&keyring.strong);
+        buffer.extend_from_slice(&keyring.fast);
+        buffer.extend_from_slice(&keyring.iv);
+
+        let encrypted =
+            self.public_key
+                .encrypt(&mut OsRng, PaddingScheme::new_pkcs1v15_encrypt(), &buffer)?;
+
+        Ok(Bytes::from(encrypted))
+    }
+
+    /// Retrieves the RSA public key in DER format.
+    pub fn get_public_key_der(&self) -> MsgResult<Bytes> {
+        self.public_key
+            .to_public_key_der()
+            .map(|der| Bytes::from(der.as_bytes()))
+            .map_err(|_| MsgError::Rsa(rsa::Error::Internal))
+    }
+
+    /// Verifies the signature of a message using the RSA public key.
+    pub fn verify_signature(&self, data: &[u8], signature: &[u8]) -> MsgResult<()> {
+        let digest = Sha256::digest(data);
+        self.public_key.verify(
+            PaddingScheme::new_pkcs1v15_sign::<Sha256>(),
+            &digest,
+            signature,
+        )?;
+
         Ok(())
-    }
-
-    /// Decrypts the given data using AES CFB mode.
-    pub fn decrypt(&mut self, data: &mut [u8]) -> MsgResult<()> {
-        let key = match &self.session_key {
-            Some(k) => k,
-            None => return Err(MsgError::KeyInit),
-        };
-
-        let iv = counter_to_iv(self.decrypt_counter);
-        let cipher = Decryptor::<Aes256>::new_from_slices(key, &iv)
-            .map_err(|e| MsgError::CipherInit(e.to_string()))?;
-
-        cipher.decrypt(data);
-        self.decrypt_counter += 1;
-        Ok(())
-    }
-
-    /// Resets the encryption and decryption counters.
-    pub fn reset_counters(&mut self) {
-        self.encrypt_counter = 0;
-        self.decrypt_counter = 0;
-    }
-
-    /// Gets the current encryption counter.
-    pub fn get_encrypt_counter(&self) -> u64 {
-        self.encrypt_counter
-    }
-
-    /// Gets the current decryption counter.
-    pub fn get_decrypt_counter(&self) -> u64 {
-        self.decrypt_counter
-    }
-}
-
-impl Default for CryptoContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Converts a counter value to a 16-byte IV for AES CFB mode.
-fn counter_to_iv(counter: u64) -> [u8; 16] {
-    let mut iv = [0u8; 16];
-    iv[..8].copy_from_slice(&counter.to_le_bytes());
-    iv
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bytes::BytesMut;
-
-    #[test]
-    fn test_cipher() {
-        let mut crypto = CryptoContext::new();
-        let key = vec![
-            0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf,
-            0x4f, 0x3c, 0x45, 0x91, 0x82, 0x73, 0xde, 0xf1, 0xa8, 0x9c,
-        ];
-        crypto.set_session_key(BytesMut::from(&key[..])).unwrap();
-
-        let mut plaintext = b"Hello, World!".to_vec();
-        crypto.encrypt(&mut plaintext).unwrap();
-        crypto.reset_counters();
-        crypto.decrypt(&mut plaintext).unwrap();
-
-        assert_eq!(plaintext, b"Hello, World!");
     }
 }
