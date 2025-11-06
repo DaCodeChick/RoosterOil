@@ -325,4 +325,17 @@ mod tests {
             .unwrap();
         assert_eq!(data.to_vec(), decrypted_fast.to_vec());
     }
+
+    #[test]
+    fn test_rsa_encrypt_decrypt_keyring() {
+        let rsa_context = RsaContext::new(2048).unwrap();
+        let keyring = Keyring::new();
+
+        let encrypted_keyring = rsa_context.encrypt_keyring(&keyring).unwrap();
+        let decrypted_keyring = rsa_context.decrypt_keyring(&encrypted_keyring).unwrap();
+
+        assert_eq!(keyring.strong.to_vec(), decrypted_keyring.strong.to_vec());
+        assert_eq!(keyring.fast.to_vec(), decrypted_keyring.fast.to_vec());
+        assert_eq!(keyring.iv.to_vec(), decrypted_keyring.iv.to_vec());
+    }
 }
