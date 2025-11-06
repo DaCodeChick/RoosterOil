@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{CryptoContext, Message, MsgError, MsgResult};
+use crate::{AesContext, Message, MsgError, MsgResult};
 
 /// Represents a Remote Method Invocation (RMI) packet.
 #[derive(Debug)]
@@ -58,9 +58,10 @@ impl RMIPacket {
     }
 }
 
+/*
 /// Codec for encoding and decoding messages with optional encryption.
 #[derive(Debug)]
-pub struct Codec(CryptoContext);
+pub struct Codec(AesContext);
 
 impl Decoder for Codec {
     type Item = Message;
@@ -106,4 +107,4 @@ impl Encoder<Message> for Codec {
         dst.put_slice(&payload);
         Ok(())
     }
-}
+}*/
