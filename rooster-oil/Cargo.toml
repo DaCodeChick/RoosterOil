@@ -1,8 +1,8 @@
 [package]
-name = "rooster-nugget"
+name = "rooster-oil"
 version = "0.1.0"
 edition = "2024"
-description = "Common network functionality for Rooster Oil"
+description = "Common network functionality for Rooster game server and tools"
 
 [features]
 default = ["server"]
