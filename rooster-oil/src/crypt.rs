@@ -20,8 +20,11 @@ use crate::{MsgError, MsgResult};
 /// Supported cipher modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CipherMode {
+    /// Electronic Codebook mode
     Ecb = 0,
+    /// Cipher Block Chaining mode
     Cbc,
+    /// Counter mode
     Ctr,
 }
 

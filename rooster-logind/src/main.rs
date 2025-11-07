@@ -1,7 +1,10 @@
 use bytes::Bytes;
 use dashmap::DashMap;
 
-use rooster_nugget::{AesContext, Keyring, MsgResult, RsaContext};
+use rooster_oil::{AesContext, Keyring, MsgResult, RsaContext};
+
+/// Number of bits for RSA keys.
+const RSA_BITS: usize = 2048;
 
 #[derive(Debug)]
 pub struct Server {
@@ -12,7 +15,7 @@ pub struct Server {
 impl Server {
     pub fn new() -> Self {
         Self {
-            rsa: RsaContext::new(2048),
+            rsa: RsaContext::new(RSA_BITS),
             sessions: DashMap::new(),
         }
     }
