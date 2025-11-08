@@ -177,6 +177,19 @@ impl Message {
         String::from_utf16(&utf16).map_err(|e| MsgError::Utf16(e))
     }
 
+    /// Reads a variable-length integer from the message buffer.
+    pub fn read_var(&mut self) -> MsgResult<u64> {
+        let size = self.read_u8()?;
+
+        match size {
+            1 => Ok(self.read_i8()? as u64),
+            2 => Ok(self.read_i16()? as u64),
+            4 => Ok(self.read_i32()? as u64),
+            8 => Ok(self.read_i64()? as u64),
+            _ => Err(MsgError::VarLength(size)),
+        }
+    }
+        
     /// Returns the number of remaining unread bytes in the message buffer.
     pub fn remaining(&self) -> usize {
         self.buffer.len().saturating_sub(self.read_pos)

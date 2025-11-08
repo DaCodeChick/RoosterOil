@@ -35,12 +35,14 @@ pub enum MsgError {
     Parse(String),
     #[error("RSA error: {0}")]
     Rsa(#[from] rsa::Error),
-    #[error("Underflow error, bytes Reqed: {0}")]
+    #[error("Underflow error, bytes required: {0}")]
     Underflow(usize),
     #[error("UTF-16 conversion error: {0}")]
     Utf16(#[from] FromUtf16Error),
     #[error("UTF-8 conversion error: {0}")]
     Utf8(#[from] FromUtf8Error),
+    #[error("Variable integer length is invalid: {0}")]
+    VarLength(u8),
 }
 
 /// Result type for message operations.
