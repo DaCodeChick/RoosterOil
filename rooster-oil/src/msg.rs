@@ -189,7 +189,7 @@ impl Message {
             _ => Err(MsgError::VarLength(size)),
         }
     }
-        
+
     /// Returns the number of remaining unread bytes in the message buffer.
     pub fn remaining(&self) -> usize {
         self.buffer.len().saturating_sub(self.read_pos)
@@ -304,6 +304,23 @@ impl Message {
         self.write_u16(utf16.len() as u16);
         for code_unit in utf16 {
             self.write_u16(code_unit);
+        }
+    }
+
+    /// Writes a variable-length integer to the message buffer.
+    pub fn write_var(&mut self, value: u64) {
+        if value <= u8::MAX as u64 {
+            self.write_u8(1);
+            self.write_u8(value as u8);
+        } else if value <= u16::MAX as u64 {
+            self.write_u8(2);
+            self.write_u16(value as u16);
+        } else if value <= u32::MAX as u64 {
+            self.write_u8(4);
+            self.write_u32(value as u32);
+        } else {
+            self.write_u8(8);
+            self.write_u64(value);
         }
     }
 

@@ -22,9 +22,46 @@ impl RMIPacket {
         Ok(self.0)
     }
 
-    /// Adds an i64 payload to the RMI packet.
-    pub fn with_i64(&mut self, value: i64) {
+    /// Adds a byte array payload to the RMI packet.
+    pub fn with_bytes(mut self, value: &[u8]) -> Self {
+        self.0.write_bytes(value);
+        self
+    }
+
+    /// Adds a 32-bit single-precision floating-point payload to the RMI packet.
+    pub fn with_f32(mut self, value: f32) -> Self {
+        self.0.write_f32(value);
+        self
+    }
+
+    /// Adds a 64-bit double-precision floating-point payload to the RMI packet.
+    pub fn with_f64(mut self, value: f64) -> Self {
+        self.0.write_f64(value);
+        self
+    }
+
+    /// Adds an 8-bit signed integer payload to the RMI packet.
+    pub fn with_i8(mut self, value: i8) -> Self {
+        self.0.write_i8(value);
+        self
+    }
+
+    /// Adds a 16-bit signed integer payload to the RMI packet.
+    pub fn with_i16(mut self, value: i16) -> Self {
+        self.0.write_i16(value);
+        self
+    }
+
+    /// Adds a 32-bit signed integer payload to the RMI packet.
+    pub fn with_i32(mut self, value: i32) -> Self {
+        self.0.write_i32(value);
+        self
+    }
+
+    /// Adds a 64-bit signed integer payload to the RMI packet.
+    pub fn with_i64(mut self, value: i64) -> Self {
         self.0.write_i64(value);
+        self
     }
 
     /// Adds a string payload to the RMI packet.
@@ -33,19 +70,25 @@ impl RMIPacket {
         self
     }
 
-    /// Adds a u16 payload to the RMI packet.
+    /// Adds an 8-bit unsigned integer payload to the RMI packet.
+    pub fn with_u8(mut self, value: u8) -> Self {
+        self.0.write_u8(value);
+        self
+    }
+
+    /// Adds a 16-bit unsigned integer payload to the RMI packet.
     pub fn with_u16(mut self, value: u16) -> Self {
         self.0.write_u16(value);
         self
     }
 
-    /// Adds a u32 payload to the RMI packet.
+    /// Adds a 32-bit unsigned integer payload to the RMI packet.
     pub fn with_u32(mut self, value: u32) -> Self {
         self.0.write_u32(value);
         self
     }
 
-    /// Adds a u64 payload to the RMI packet.
+    /// Adds a 64-bit unsigned integer payload to the RMI packet.
     pub fn with_u64(mut self, value: u64) -> Self {
         self.0.write_u64(value);
         self
@@ -54,6 +97,12 @@ impl RMIPacket {
     /// Adds a Unicode string payload to the RMI packet.
     pub fn with_unicode(mut self, value: &str) -> Self {
         self.0.write_unicode(value);
+        self
+    }
+
+    /// Adds a variable-length integer payload to the RMI packet.
+    pub fn with_var(mut self, value: u64) -> Self {
+        self.0.write_var(value);
         self
     }
 }

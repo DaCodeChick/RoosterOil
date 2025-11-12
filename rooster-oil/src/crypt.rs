@@ -9,6 +9,7 @@ use crc32fast;
 use ctr::Ctr128BE;
 use ecb::{Decryptor as ECBDec, Encryptor as ECBEnc};
 use rand::RngCore;
+use rc4::{Key, Rc4};
 use rsa::{
     Pkcs1v15Encrypt, Pkcs1v15Sign, RsaPrivateKey, RsaPublicKey,
     pkcs8::EncodePublicKey,
@@ -34,6 +35,7 @@ pub struct Keyring {
     strong: [u8; 32],
     fast: [u8; 16],
     iv: [u8; 16],
+    rc4: Rc4Context,
 }
 
 impl Keyring {
@@ -44,11 +46,26 @@ impl Keyring {
         let mut iv = [0u8; 16];
         let mut rng = rand::thread_rng();
 
-        rng.fill_bytes(&mut strong);
-        rng.fill_bytes(&mut fast);
-        rng.fill_bytes(&mut iv);
+        rng.fill(&mut strong);
+        rng.fill(&mut fast);
+        rng.fill(&mut iv);
 
-        Self { strong, fast, iv }
+        Self {
+            strong,
+            fast,
+            iv,
+            rc4: Rc4Context::new(&fast),
+        }
+    }
+
+    /// Applies RC4 encryption/decryption to the provided data in place.
+    pub fn crypt_rc4(&mut self, data: &mut [u8]) {
+        self.rc4.crypt(data);
+    }
+
+    /// Returns the session key (fast key) from the keyring.
+    pub const fn get_session_key(&self) -> [u8; 16] {
+        self.fast
     }
 }
 
@@ -204,6 +221,24 @@ impl AesContext {
         let cipher =
             ECBEnc::<Aes256>::new_from_slice(&self.0.strong).map_err(|_| MsgError::KeyLength)?;
         Ok(cipher.encrypt_padded_vec_mut::<Pkcs7>(data))
+    }
+}
+
+/// Represents the RC4 cryptographic context.
+#[derive(Debug, Clone)]
+pub struct Rc4Context(Rc4);
+
+impl Rc4Context {
+    /// Creates a new RC4 context with the provided key.
+    pub fn new(key: &[u8]) -> Self {
+        let key = Key::from_slice(key);
+
+        Self(Rc4::new(key))
+    }
+
+    /// Applies the RC4 keystream to the provided data in place.
+    pub fn crypt(&mut self, data: &mut [u8]) {
+        self.0.apply_keystream(data);
     }
 }
 
