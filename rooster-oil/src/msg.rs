@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use flate2::{Compress, Compression, FlushCompress};
 
@@ -12,11 +13,30 @@ const PACKET_MAGIC: u16 = 0x5713;
 /// The threshold above which messages are compressed.
 const UNCOMPRESSED_THRESHOLD: usize = 50;
 
+bitflags! {
+    /// Represents the capabilities of a message.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Capabilities: u32 {
+        /// Indicates support for compression.
+        const COMPRESSION = 16;
+
+        /// Indicates support for encryption.
+        const ENCRYPTION = 32;
+
+        /// Indicates support for UDP transport.
+        const UDP = 64;
+
+        /// Indicates support for P2P transport.
+        const P2P = 128;
+    }
+}
+
 /// Represents a message with a byte buffer and bit-level access.
 #[derive(Debug)]
 pub struct Message {
     buffer: BytesMut,
     read_pos: usize,
+    capabilities: Capabilities,
     bit_buffer: u8,
     bit_offset: u8,
 }
@@ -27,6 +47,7 @@ impl Message {
         let mut msg = Message {
             buffer: BytesMut::new(),
             read_pos: 0,
+            capabilities: Capabilities::empty(),
             bit_buffer: 0,
             bit_offset: 0,
         };
@@ -40,6 +61,7 @@ impl Message {
         let mut msg = Message {
             buffer: BytesMut::with_capacity(capacity),
             read_pos: 0,
+            capabilities: Capabilities::empty(),
             bit_buffer: 0,
             bit_offset: 0,
         };
@@ -66,9 +88,19 @@ impl Message {
         Ok(())
     }
 
+    /// Retrieves the capabilities of the message as a u32.
+    pub const fn get_capabilities_u32(&self) -> u32 {
+        self.capabilities.bits()
+    }
+
     /// Checks if the message buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
+    }
+
+    /// Checks if the message is marked for UDP transport.
+    pub const fn is_udp(&self) -> bool {
+        self.capabilities.contains(Capabilities::UDP)
     }
 
     /// Returns the length of the message buffer.
@@ -213,6 +245,15 @@ impl Message {
     /// Determines if the message should be compressed based on its length.
     pub fn should_compress(&self) -> bool {
         (self.buffer.len() - HEADER_LEN) > UNCOMPRESSED_THRESHOLD
+    }
+
+    /// Enables or disables UDP capability for the message.
+    pub fn set_udp(&mut self, enabled: bool) {
+        if enabled {
+            self.capabilities.insert(Capabilities::UDP);
+        } else {
+            self.capabilities.remove(Capabilities::UDP);
+        }
     }
 
     /// Writes a specified number of bits from a u32 value to the message buffer.

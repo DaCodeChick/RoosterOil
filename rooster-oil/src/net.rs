@@ -3,6 +3,9 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{AesContext, Message, MsgError, MsgResult};
 
+/// The protocol version used for RMI packets.
+const PROTOCOL_VERSION: u16 = 0xF2F;
+
 /// Represents a Remote Method Invocation (RMI) packet.
 #[derive(Debug)]
 pub struct RMIPacket(Message);
@@ -91,6 +94,12 @@ impl RMIPacket {
     /// Adds a 64-bit unsigned integer payload to the RMI packet.
     pub fn with_u64(mut self, value: u64) -> Self {
         self.0.write_u64(value);
+        self
+    }
+
+    /// Sets the UDP capability flag for the RMI packet.
+    pub fn with_udp(mut self, value: bool) -> Self {
+        self.0.set_udp(value);
         self
     }
 

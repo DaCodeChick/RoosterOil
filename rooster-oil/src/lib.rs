@@ -12,6 +12,9 @@ pub use crypt::*;
 pub use msg::*;
 pub use net::*;
 
+/// Cross-domain policy for Flash clients.
+pub const CROSS_DOMAIN_POLICY: &u8 = b"<?xml version=\"1.0\"?><cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>";
+
 /// Error type for message operations.
 #[derive(Debug, Error)]
 pub enum MsgError {

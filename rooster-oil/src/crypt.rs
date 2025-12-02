@@ -231,9 +231,7 @@ pub struct Rc4Context(Rc4);
 impl Rc4Context {
     /// Creates a new RC4 context with the provided key.
     pub fn new(key: &[u8]) -> Self {
-        let key = Key::from_slice(key);
-
-        Self(Rc4::new(key))
+        Self(Rc4::new(Key::from_slice(key)))
     }
 
     /// Applies the RC4 keystream to the provided data in place.
