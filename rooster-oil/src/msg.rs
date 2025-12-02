@@ -107,6 +107,16 @@ impl Message {
         Ok(value)
     }
 
+    /// Reads raw bytes from the message buffer.
+    pub fn read_raw(&mut self, length: usize) -> MsgResult<Bytes> {
+        if self.read_pos + length > self.buffer.len() {
+            return Err(MsgError::Underflow(length));
+        }
+        let bytes = self.buffer.slice(self.read_pos..self.read_pos + length);
+        self.read_pos += length;
+        Ok(bytes)
+    }
+
     /// Reads a string from the message buffer.
     pub fn read_string(&mut self) -> MsgResult<String> {
         let length = self.read_u16()? as usize;

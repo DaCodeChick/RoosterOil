@@ -261,41 +261,26 @@ impl RsaContext {
         })
     }
 
-    cfg_if! {
-        if #[cfg(feature = "server")] {
-            /// Decrypts an encrypted keyring using the RSA private key.
-            pub fn decrypt_keyring(&self, data: &[u8]) -> MsgResult<Keyring> {
-                let decrypted = self
-                    .private_key
-                    .decrypt(Pkcs1v15Encrypt::default(), data)?;
+    /// Decrypts an encrypted keyring using the RSA private key.
+    #[cfg(feature = "server")]
+    pub fn decrypt_keyring(&self, data: &[u8]) -> MsgResult<Keyring> {
+        let decrypted = self
+            .private_key
+            .decrypt(Pkcs1v15Encrypt::default(), data)?;
 
-                if decrypted.len() != 64 {
-                    return Err(MsgError::KeyLength);
-                }
-
-                let mut strong = [0u8; 32];
-                let mut fast = [0u8; 16];
-                let mut iv = [0u8; 16];
-
-                strong.copy_from_slice(&decrypted[0..32]);
-                fast.copy_from_slice(&decrypted[32..48]);
-                iv.copy_from_slice(&decrypted[48..64]);
-
-                Ok(Keyring { strong, fast, iv })
-            }
-
-            /// Signs data using the RSA private key.
-            pub fn sign_data(&self, data: &[u8]) -> MsgResult<Bytes> {
-                let digest = Sha256::digest(data);
-
-                let signature = self.private_key.sign(
-                    Pkcs1v15Sign::new::<Sha256>(),
-                    &digest,
-                )?;
-
-                Ok(Bytes::from(signature))
-            }
+        if decrypted.len() != 64 {
+            return Err(MsgError::KeyLength);
         }
+
+        let mut strong = [0u8; 32];
+        let mut fast = [0u8; 16];
+        let mut iv = [0u8; 16];
+
+        strong.copy_from_slice(&decrypted[0..32]);
+        fast.copy_from_slice(&decrypted[32..48]);
+        iv.copy_from_slice(&decrypted[48..64]);
+
+        Ok(Keyring { strong, fast, iv })
     }
 
     /// Encrypts a keyring using the RSA public key.
@@ -320,6 +305,19 @@ impl RsaContext {
             .to_public_key_der()
             .map(|der| Bytes::from(der.as_bytes().to_vec()))
             .map_err(|_| MsgError::Rsa(rsa::Error::Internal))
+    }
+
+    /// Signs data using the RSA private key.
+    #[cfg(feature = "server")]
+    pub fn sign_data(&self, data: &[u8]) -> MsgResult<Bytes> {
+        let digest = Sha256::digest(data);
+
+        let signature = self.private_key.sign(
+            Pkcs1v15Sign::new::<Sha256>(),
+            &digest,
+        )?;
+
+        Ok(Bytes::from(signature))
     }
 
     /// Verifies the signature of a message using the RSA public key.
