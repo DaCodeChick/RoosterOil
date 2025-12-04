@@ -24,3 +24,4 @@ rc4 = "0.1.0"
 rsa = { version = "0.9.8" , features = ["sha2"]}
 thiserror = "2.0.17"
 tokio-util = { version = "0.7.17", features = ["codec"] }
+uuid = "1.19.0"

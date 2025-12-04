@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use flate2::{Compress, Compression, FlushCompress};
+use uuid::Uuid;
 
 use crate::{MsgError, MsgResult};
 
@@ -127,6 +128,23 @@ impl Message {
         let value = (&self.buffer[self.read_pos..self.read_pos + 4]).get_f32_le();
         self.read_pos += 4;
         Ok(value)
+    }
+
+    /// Reads a 64-bit floating point number from the message buffer.
+    pub fn read_f64(&mut self) -> MsgResult<f64> {
+        if self.read_pos + 8 > self.buffer.len() {
+            return Err(MsgError::Underflow(8));
+        }
+        let value = (&self.buffer[self.read_pos..self.read_pos + 8]).get_f64_le();
+        self.read_pos += 8;
+        Ok(value)
+    }
+
+    /// Reads a GUID from the message buffer.
+    pub fn read_guid(&mut self) -> MsgResult<Uuid> {
+        let bytes = self.read_raw(16)?;
+        let uuid = Uuid::from_slice(&bytes).map_err(|e| MsgError::Guid(e))?;
+        Ok(uuid)
     }
 
     /// Reads a 32-bit signed integer from the message buffer.
@@ -279,6 +297,7 @@ impl Message {
 
     /// Writes a boolean value to the message buffer.
     pub fn write_bool(&mut self, value: bool) {
+        self.flush_bits();
         self.write_u8(if value { 1 } else { 0 });
     }
 
@@ -291,26 +310,37 @@ impl Message {
 
     /// Writes a 32-bit floating point number to the message buffer.
     pub fn write_f32(&mut self, value: f32) {
+        self.flush_bits();
         self.buffer.put_f32_le(value);
     }
 
     /// Writes a 64-bit floating point number to the message buffer.
     pub fn write_f64(&mut self, value: f64) {
+        self.flush_bits();
         self.buffer.put_f64_le(value);
+    }
+
+    /// Writes a GUID to the message buffer.
+    pub fn write_guid(&mut self, value: &Uuid) {
+        self.flush_bits();
+        self.buffer.put_slice(value.as_bytes());
     }
 
     /// Writes a 16-bit signed integer to the message buffer.
     pub fn write_i16(&mut self, value: i16) {
+        self.flush_bits();
         self.buffer.put_i16_le(value);
     }
 
     /// Writes a 32-bit signed integer to the message buffer.
     pub fn write_i32(&mut self, value: i32) {
+        self.flush_bits();
         self.buffer.put_i32_le(value);
     }
 
     /// Writes a 64-bit signed integer to the message buffer.
     pub fn write_i64(&mut self, value: i64) {
+        self.flush_bits();
         self.buffer.put_i64_le(value);
     }
 
@@ -330,21 +360,25 @@ impl Message {
 
     /// Writes a single byte to the message buffer.
     pub fn write_u8(&mut self, value: u8) {
+        self.flush_bits();
         self.buffer.put_u8(value);
     }
 
     /// Writes a 16-bit unsigned integer to the message buffer.
     pub fn write_u16(&mut self, value: u16) {
+        self.flush_bits();
         self.buffer.put_u16_le(value);
     }
 
     /// Writes a 32-bit unsigned integer to the message buffer.
     pub fn write_u32(&mut self, value: u32) {
+        self.flush_bits();
         self.buffer.put_u32_le(value);
     }
 
     /// Writes a 64-bit unsigned integer to the message buffer.
     pub fn write_u64(&mut self, value: u64) {
+        self.flush_bits();
         self.buffer.put_u64_le(value);
     }
 
@@ -360,6 +394,7 @@ impl Message {
 
     /// Writes a variable-length integer to the message buffer.
     pub fn write_var(&mut self, value: u64) {
+        self.flush_bits();
         if value <= u8::MAX as u64 {
             self.write_u8(1);
             self.write_u8(value as u8);
@@ -408,6 +443,7 @@ impl From<&[u8]> for Message {
         Self {
             buffer: BytesMut::from(data),
             read_pos: 0,
+            capabilities: Capabilities::empty(),
             bit_buffer: 0,
             bit_offset: 0,
         }
@@ -419,6 +455,7 @@ impl From<Bytes> for Message {
         Self {
             buffer: BytesMut::from(&data[..]),
             read_pos: 0,
+            capabilities: Capabilities::empty(),
             bit_buffer: 0,
             bit_offset: 0,
         }

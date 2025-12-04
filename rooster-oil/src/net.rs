@@ -1,5 +1,6 @@
 use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
+use uuid::Uuid;
 
 use crate::{AesContext, Message, MsgError, MsgResult};
 
@@ -43,6 +44,11 @@ impl RMIPacket {
         self
     }
 
+    pub fn with_guid(mut self, value: &Uuid) -> Self {
+        self.0.write_guid(value);
+        self
+    }
+
     /// Adds an 8-bit signed integer payload to the RMI packet.
     pub fn with_i8(mut self, value: i8) -> Self {
         self.0.write_i8(value);
@@ -64,6 +70,12 @@ impl RMIPacket {
     /// Adds a 64-bit signed integer payload to the RMI packet.
     pub fn with_i64(mut self, value: i64) -> Self {
         self.0.write_i64(value);
+        self
+    }
+
+    /// Adds a raw byte slice payload to the RMI packet.
+    pub fn with_raw(mut self, value: &[u8]) -> Self {
+        self.0.write_raw(value);
         self
     }
 

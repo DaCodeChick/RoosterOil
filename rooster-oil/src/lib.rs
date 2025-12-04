@@ -3,6 +3,7 @@ use rsa;
 use std::io;
 use std::string::{FromUtf8Error, FromUtf16Error};
 use thiserror::Error;
+use uuid;
 
 pub mod crypt;
 pub mod msg;
@@ -30,6 +31,8 @@ pub enum MsgError {
     CrcMismatch(u32, u32),
     #[error("Decompression error")]
     Decompress(#[from] DecompressError),
+    #[error("GUID error: {0}")]
+    Guid(#[from] uuid::Error),
     #[error("Invalid key length")]
     KeyLength,
     #[error("Unknown opcode: {0}")]
